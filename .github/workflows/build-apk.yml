@@ -12,7 +12,7 @@ on:
 
 jobs:
   build:
-    name: Analyze, test, and build release APK
+    name: Analyze, test, and build APKs
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -40,12 +40,22 @@ jobs:
       - name: Run tests
         run: flutter test
 
+      - name: Build debug APK
+        run: flutter build apk --debug
+
       - name: Build release APK
         run: flutter build apk --release
 
-      - name: Upload APK artifact
+      - name: Upload debug APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: happy-club-apk
+          name: happy-club-apk-debug
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+
+      - name: Upload release APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: happy-club-apk-release
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
