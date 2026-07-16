@@ -40,11 +40,34 @@ jobs:
       - name: Run tests
         run: flutter test
 
+      # If the release-signing secrets are set (see README for the four
+      # secret names), decode the keystore and write android/key.properties
+      # so the release build/bundle below are signed with the real upload
+      # key instead of falling back to the debug key.
+      - name: Configure release signing
+        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/upload-keystore.jks
+          cat > android/key.properties <<EOF
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          keyPassword=$ANDROID_KEY_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          storeFile=upload-keystore.jks
+          EOF
+
       - name: Build debug APK
         run: flutter build apk --debug
 
       - name: Build release APK
         run: flutter build apk --release
+
+      - name: Build release App Bundle (for Play Store upload)
+        run: flutter build appbundle --release
 
       - name: Upload debug APK artifact
         uses: actions/upload-artifact@v4
@@ -58,4 +81,11 @@ jobs:
         with:
           name: happy-club-apk-release
           path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+
+      - name: Upload release App Bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: happy-club-release-aab
+          path: build/app/outputs/bundle/release/app-release.aab
           if-no-files-found: error
