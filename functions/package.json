@@ -1,0 +1,17 @@
+{
+  "name": "functions",
+  "description": "Cloud Functions for Happy Club (Gemini-backed AI Coach proxy)",
+  "private": true,
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "scripts": {
+    "serve": "firebase emulators:start --only functions",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "dependencies": {
+    "firebase-functions": "^6.1.0"
+  }
+}

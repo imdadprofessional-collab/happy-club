@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../services/ai_backend_service.dart';
 import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
 
 class _ChatMessage {
-  _ChatMessage(this.text, this.fromCoach);
+  const _ChatMessage(this.text, this.fromCoach);
   final String text;
   final bool fromCoach;
 }
@@ -20,7 +21,9 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
   final List<_ChatMessage> _messages = [];
   final _controller = TextEditingController();
   final _scrollController = ScrollController();
+  final _backend = AiBackendService();
   bool _greeted = false;
+  bool _thinking = false;
 
   void _greet(AppState appState) {
     if (_greeted) return;
@@ -48,14 +51,35 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
     });
   }
 
-  void _send(String text) {
-    if (text.trim().isEmpty) return;
+  Future<void> _send(String text) async {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty || _thinking) return;
     final appState = context.read<AppState>();
     setState(() {
-      _messages.add(_ChatMessage(text.trim(), false));
-      _messages.add(_ChatMessage(appState.aiCoach.respond(text.trim()), true));
+      _messages.add(_ChatMessage(trimmed, false));
+      _thinking = true;
     });
     _controller.clear();
+    _scrollToBottom();
+
+    // Real Gemini-backed reply when signed in and the backend is reachable;
+    // otherwise the offline template coach, which always works.
+    final reply = appState.isSignedIn
+        ? await _backend.chat(
+            message: trimmed,
+            name: appState.profile.name,
+            streak: appState.streak,
+            happinessScore: appState.happinessScore,
+          )
+        : null;
+
+    if (!mounted) return;
+    setState(() {
+      _thinking = false;
+      _messages.add(
+        _ChatMessage(reply ?? appState.aiCoach.respond(trimmed), true),
+      );
+    });
     _scrollToBottom();
   }
 
@@ -112,9 +136,15 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
             child: ListView.builder(
               controller: _scrollController,
               padding: const EdgeInsets.all(16),
-              itemCount: _messages.length,
-              itemBuilder: (context, i) =>
-                  _MessageBubble(message: _messages[i]),
+              itemCount: _messages.length + (_thinking ? 1 : 0),
+              itemBuilder: (context, i) {
+                if (i == _messages.length) {
+                  return const _MessageBubble(
+                    message: _ChatMessage('Thinking…', true),
+                  );
+                }
+                return _MessageBubble(message: _messages[i]);
+              },
             ),
           ),
           SingleChildScrollView(
@@ -144,10 +174,11 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
                   Expanded(
                     child: TextField(
                       controller: _controller,
+                      enabled: !_thinking,
                       decoration: const InputDecoration(
                         hintText: 'Talk to your coach…',
                       ),
-                      onSubmitted: _send,
+                      onSubmitted: (value) => _send(value),
                     ),
                   ),
                   IconButton(
@@ -155,7 +186,7 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
                       Icons.send_rounded,
                       color: AppColors.primary,
                     ),
-                    onPressed: () => _send(_controller.text),
+                    onPressed: _thinking ? null : () => _send(_controller.text),
                   ),
                 ],
               ),

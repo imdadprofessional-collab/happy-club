@@ -145,6 +145,46 @@ Still to do:
    Without this, Firebase can't verify the Google ID token's audience and
    sign-in will fail even though the button works.
 
+## AI Coach: Gemini via a Cloud Function
+
+`AiCoachScreen`'s free-text chat now tries a real Gemini-backed reply before
+falling back to `AiCoachService`'s offline templates (which still power the
+daily greeting and the three quick-action buttons, since those are
+deterministic and driven by local app data rather than open conversation).
+
+The API key never ships in the app. `functions/index.js` is a Firebase
+Cloud Function (`coachChat`, 2nd gen, callable) that holds the Gemini key
+server-side, checks the caller is signed in, and proxies the request. The
+Flutter side is `lib/services/ai_backend_service.dart`, called via the
+`cloud_functions` package — any failure (not deployed yet, offline, quota)
+just falls through to the offline coach, so the feature degrades gracefully
+rather than erroring.
+
+**Deploying the function** (needs the Firebase CLI logged into an account
+with access to `happy-club-156a5`, which isn't something I can do from
+here):
+
+```bash
+npm install -g firebase-tools   # if you don't have it
+firebase login
+firebase functions:secrets:set GEMINI_API_KEY
+# ^ paste your Gemini API key from https://aistudio.google.com/apikey
+#   when prompted. This is a Firebase/Google Secret Manager secret — a
+#   separate thing from the GEMINI_API_KEY you added to GitHub Actions
+#   secrets, which Cloud Functions can't see.
+firebase deploy --only functions
+```
+
+Requirements before that works:
+- The Firebase project must be on the **Blaze (pay-as-you-go) plan** —
+  Cloud Functions' free Spark plan can't make outbound network calls, which
+  calling the Gemini API needs. Firebase Console → upgrade project.
+- The account running `firebase login` needs Owner/Editor on the project.
+
+Nothing on the Flutter side needs to change after deploying — the app calls
+the function by name (`coachChat`) via the Firebase SDK, not a URL, so it
+resolves automatically once the function exists.
+
 ## Running it
 
 ```bash
@@ -164,13 +204,18 @@ next step before shipping.
 
 ## Before shipping to production
 
-- Wire `StorageService`/`AppState` to Firebase Auth + Firestore for real
-  accounts and cross-device sync.
+- Auth (email/password + Google) and Firestore sync are wired — see the
+  **Firebase** section above for what's done vs. what's still
+  console-side setup (SHA-1s, web client ID).
+- The Gemini-backed AI Coach is wired — see **AI Coach: Gemini via a Cloud
+  Function** above; it just needs the Cloud Function deployed.
 - Replace `MembershipService`'s mock purchase with real platform billing and
   server-side receipt validation.
-- Add server-side content moderation for the Happy Feed.
-- Replace `AiCoachService`'s templates with a real model call through a
-  backend proxy.
+- Add server-side content moderation for the Happy Feed (the current
+  `ModerationService` is client-side only, a first line of defense that can
+  be bypassed).
+- Make the Happy Feed a live stream (`Firestore.snapshots()`) instead of a
+  fetch-once-on-sign-in list.
 - Wire push notifications (positive nudges: "today's mission is waiting",
   "someone celebrated your achievement", streak reminders).
 - Add crash reporting/analytics and an accessibility pass (screen reader
