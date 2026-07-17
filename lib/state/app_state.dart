@@ -49,7 +49,11 @@ class AppState extends ChangeNotifier {
     MembershipService? membershipService,
     AiCoachService? aiCoachService,
     FirestoreService? firestoreService,
-  }) : _storage = storage,
+  }) : // `this._storage` would make the named parameter itself private
+       // (`_storage`), which other libraries (e.g. main.dart) can't pass by
+       // name — so this stays a manual assignment instead.
+       // ignore: prefer_initializing_formals
+       _storage = storage,
        _missionEngine = missionEngine ?? MissionEngine(),
        _membershipService = membershipService ?? MembershipService(),
        _aiCoach = aiCoachService ?? AiCoachService(),
