@@ -81,6 +81,7 @@ jobs:
           name: happy-club-apk-debug
           path: build/app/outputs/flutter-apk/app-debug.apk
           if-no-files-found: error
+          retention-days: 5
 
       - name: Upload release APK artifact
         uses: actions/upload-artifact@v4
@@ -88,6 +89,7 @@ jobs:
           name: happy-club-apk-release
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
+          retention-days: 5
 
       - name: Upload release App Bundle artifact
         uses: actions/upload-artifact@v4
@@ -95,3 +97,4 @@ jobs:
           name: happy-club-release-aab
           path: build/app/outputs/bundle/release/app-release.aab
           if-no-files-found: error
+          retention-days: 5
