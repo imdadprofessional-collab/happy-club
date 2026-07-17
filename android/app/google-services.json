@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "781226755640",
+    "project_id": "happy-club-156a5",
+    "storage_bucket": "happy-club-156a5.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:781226755640:android:2603731b12295d482348cd",
+        "android_client_info": {
+          "package_name": "com.happyclub.happy_club"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAN4Xqcjh1qsEKb1WLugOK6mjEHOnZKPFw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
