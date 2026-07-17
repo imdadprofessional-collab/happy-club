@@ -1,3 +1,4 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'screens/onboarding/onboarding_flow.dart';
@@ -7,7 +8,13 @@ import 'state/app_state.dart';
 import 'theme/app_colors.dart';
 import 'theme/app_theme.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  // Reads android/app/google-services.json (via the Google Services Gradle
+  // plugin) — no explicit FirebaseOptions needed for the Android-only setup
+  // currently configured. Add firebase_options.dart (flutterfire configure)
+  // if/when iOS or web get their own Firebase config.
+  await Firebase.initializeApp();
   runApp(const HappyClubApp());
 }
 

@@ -61,7 +61,9 @@ a real backend without changing the UI layer:
   (`SharedPreferences`). In production this becomes a repository backed by
   **Firebase Auth** (identity) + **Firestore** (synced documents), with this
   class's shape mostly unchanged — see the doc comment in
-  `storage_service.dart`.
+  `storage_service.dart`. Firebase itself is now wired into the app (see
+  below) but `AppState` doesn't read/write Firestore yet — that repository
+  swap is the next step.
 - **`MembershipService`** — mocks the `$1` trial → `$4.99/mo` → `$49.99/yr`
   purchase flow. Swap for Google Play Billing / StoreKit (or a wrapper like
   RevenueCat), mirroring entitlement state server-side.
@@ -72,6 +74,35 @@ a real backend without changing the UI layer:
 - **`ModerationService`** — a client-side first line of defense (instant
   typing feedback). A real deployment must also run server-side moderation
   before content becomes publicly visible.
+
+## Firebase
+
+The Android app is connected to a real Firebase project (`happy-club-156a5`):
+`android/app/google-services.json` is committed, the Google Services Gradle
+plugin is applied (`android/settings.gradle.kts` + `android/app/build.gradle.kts`),
+and `Firebase.initializeApp()` runs in `main.dart` before the app starts.
+`firebase_core` and `cloud_firestore` are in `pubspec.yaml`.
+
+That's the plumbing, not the wiring: no screen reads or writes Firestore
+yet, and there's no Firebase Auth — the app still runs entirely on local
+`SharedPreferences` via `StorageService`. Still to do:
+
+- Enable a sign-in method in the Firebase console (Authentication tab) and
+  add a real `AuthService` + sign-in screen — right now every install is an
+  anonymous, unlinked local profile.
+- Write a `FirestoreRepository` behind the same shape as `StorageService`
+  and swap it into `AppState` (missions, posts, journals, gamification
+  state) so data syncs across devices instead of staying on-device.
+- Set real Firestore security rules once there's an auth model — Firestore
+  starts locked down (or wide open in test mode) by default; don't ship
+  either extreme.
+- iOS isn't configured — only `google-services.json` (Android) exists. Add
+  an iOS app in the Firebase console, download `GoogleService-Info.plist`,
+  and run `flutterfire configure` to generate `firebase_options.dart` if/when
+  iOS needs it.
+- Restrict the API key in `google-services.json` (Google Cloud Console →
+  Credentials) to this Android package + SHA-1 fingerprint. It's low-risk in
+  a private repo, but worth doing before the repo is ever made public.
 
 ## Running it
 

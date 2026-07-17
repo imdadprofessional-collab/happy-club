@@ -3,6 +3,9 @@ import java.util.Properties
 
 plugins {
     id("com.android.application")
+    // Reads google-services.json (committed at android/app/google-services.json)
+    // and wires the Firebase project so Firebase.initializeApp() works at runtime.
+    id("com.google.gms.google-services")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
