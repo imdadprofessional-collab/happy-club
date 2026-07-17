@@ -8,6 +8,7 @@ import '../models/mission.dart';
 import '../models/post.dart';
 import '../models/user_profile.dart';
 import '../services/ai_coach_service.dart';
+import '../services/firestore_service.dart';
 import '../services/gamification_service.dart';
 import '../services/membership_service.dart';
 import '../services/mission_engine.dart';
@@ -47,17 +48,26 @@ class AppState extends ChangeNotifier {
     MissionEngine? missionEngine,
     MembershipService? membershipService,
     AiCoachService? aiCoachService,
+    FirestoreService? firestoreService,
   }) : _storage = storage,
        _missionEngine = missionEngine ?? MissionEngine(),
        _membershipService = membershipService ?? MembershipService(),
-       _aiCoach = aiCoachService ?? AiCoachService();
+       _aiCoach = aiCoachService ?? AiCoachService(),
+       _firestore = firestoreService ?? FirestoreService();
 
   final StorageService _storage;
   final MissionEngine _missionEngine;
   final MembershipService _membershipService;
   final AiCoachService _aiCoach;
+  final FirestoreService _firestore;
 
   AiCoachService get aiCoach => _aiCoach;
+
+  /// Firebase Auth uid once signed in via [attachUser], or null while
+  /// running purely on local storage. Mutations mirror to Firestore
+  /// (best-effort, fire-and-forget) only when this is set.
+  String? uid;
+  bool get isSignedIn => uid != null;
 
   bool isLoading = true;
   bool onboardingComplete = false;
@@ -223,6 +233,189 @@ class AppState extends ChangeNotifier {
   String _dateKey(DateTime d) => '${d.year}-${d.month}-${d.day}';
 
   // ---------------------------------------------------------------------
+  // Firebase account sync
+  // ---------------------------------------------------------------------
+
+  /// Called after a successful Firebase sign-in. If the account already has
+  /// data in Firestore (returning user / another device), that data wins
+  /// and replaces local state. Otherwise, this device's current local state
+  /// is pushed up as the account's first snapshot. This is a simple
+  /// "remote wins if present" strategy, not field-level merge — good enough
+  /// for a single-device-at-a-time app, but a real multi-device product
+  /// would want conflict resolution.
+  Future<void> attachUser({required String newUid, String? email}) async {
+    uid = newUid;
+    try {
+      final remote = await _firestore.loadUserDoc(newUid);
+      if (remote != null) {
+        await _hydrateFromRemote(newUid, remote);
+      } else {
+        await _pushFullStateToRemote(newUid);
+      }
+      final remotePosts = await _firestore.loadRecentPosts(currentUid: newUid);
+      if (remotePosts.isNotEmpty) {
+        final existingIds = posts.map((p) => p.id).toSet();
+        posts.insertAll(
+          0,
+          remotePosts.where((p) => !existingIds.contains(p.id)),
+        );
+      }
+    } catch (_) {
+      // Offline or first-run permissions hiccup — keep going on local data.
+    }
+    notifyListeners();
+  }
+
+  /// Signs the local session out of the synced account without deleting
+  /// locally cached data — the app keeps working offline/local-only.
+  void detachUser() {
+    uid = null;
+    notifyListeners();
+  }
+
+  Future<void> _hydrateFromRemote(
+    String remoteUid,
+    Map<String, dynamic> data,
+  ) async {
+    if (data['name'] != null) profile.name = data['name'] as String;
+    if (data['avatarEmoji'] != null) {
+      profile.avatarEmoji = data['avatarEmoji'] as String;
+    }
+    xp = data['xp'] as int? ?? xp;
+    coins = data['coins'] as int? ?? coins;
+    streak = data['streak'] as int? ?? streak;
+    longestStreak = data['longestStreak'] as int? ?? longestStreak;
+    final lastCompletionRaw = data['lastCompletionDate'] as String?;
+    if (lastCompletionRaw != null) {
+      lastCompletionDate = DateTime.tryParse(lastCompletionRaw);
+    }
+    final statusName = data['membershipStatus'] as String?;
+    if (statusName != null) {
+      membershipStatus = MembershipStatus.values.firstWhere(
+        (s) => s.name == statusName,
+        orElse: () => membershipStatus,
+      );
+    }
+    communityReactionCount =
+        data['communityReactionCount'] as int? ?? communityReactionCount;
+    communityPostCount =
+        data['communityPostCount'] as int? ?? communityPostCount;
+    final unlocked = (data['unlockedAchievementIds'] as List?)?.cast<String>();
+    if (unlocked != null) {
+      unlockedAchievementIds
+        ..clear()
+        ..addAll(unlocked);
+    }
+
+    final remoteMissions = await _firestore.loadCompletedMissions(remoteUid);
+    if (remoteMissions.isNotEmpty) {
+      completedMissions
+        ..clear()
+        ..addAll(remoteMissions);
+    }
+    final remoteGratitude = await _firestore.loadGratitudeEntries(remoteUid);
+    if (remoteGratitude.isNotEmpty) {
+      gratitudeEntries
+        ..clear()
+        ..addAll(remoteGratitude);
+    }
+    final remoteReflections = await _firestore.loadReflectionEntries(remoteUid);
+    if (remoteReflections.isNotEmpty) {
+      reflectionEntries
+        ..clear()
+        ..addAll(remoteReflections);
+    }
+    final remoteMoods = await _firestore.loadMoodEntries(remoteUid);
+    if (remoteMoods.isNotEmpty) {
+      moodEntries
+        ..clear()
+        ..addAll(remoteMoods);
+    }
+
+    await _persistEverythingLocally();
+    _resolveTodayMission();
+    _resolveTodayMood();
+  }
+
+  Future<void> _pushFullStateToRemote(String remoteUid) async {
+    await _firestore.saveUserDoc(remoteUid, _userDocSnapshot());
+    for (final m in completedMissions) {
+      await _firestore.addCompletedMission(remoteUid, m);
+    }
+    for (final g in gratitudeEntries) {
+      await _firestore.addGratitudeEntry(remoteUid, g);
+    }
+    for (final r in reflectionEntries) {
+      await _firestore.addReflectionEntry(remoteUid, r);
+    }
+    for (final mood in moodEntries) {
+      await _firestore.upsertMoodEntry(remoteUid, mood);
+    }
+  }
+
+  Map<String, dynamic> _userDocSnapshot() => {
+    'name': profile.name,
+    'avatarEmoji': profile.avatarEmoji,
+    'xp': xp,
+    'coins': coins,
+    'streak': streak,
+    'longestStreak': longestStreak,
+    'lastCompletionDate': lastCompletionDate?.toIso8601String(),
+    'membershipStatus': membershipStatus.name,
+    'communityReactionCount': communityReactionCount,
+    'communityPostCount': communityPostCount,
+    'unlockedAchievementIds': unlockedAchievementIds.toList(),
+  };
+
+  /// Best-effort mirror of the user doc to Firestore; never throws.
+  void _syncUserDoc() {
+    final currentUid = uid;
+    if (currentUid == null) return;
+    _firestore.saveUserDoc(currentUid, _userDocSnapshot()).catchError((_) {});
+  }
+
+  Future<void> _persistEverythingLocally() async {
+    await Future.wait([
+      _storage.setJson(StorageKeys.userProfile, profile.toJson()),
+      _storage.setInt(StorageKeys.xp, xp),
+      _storage.setInt(StorageKeys.coins, coins),
+      _storage.setInt(StorageKeys.streak, streak),
+      _storage.setInt(StorageKeys.longestStreak, longestStreak),
+      if (lastCompletionDate != null)
+        _storage.setString(
+          StorageKeys.lastCompletionDate,
+          lastCompletionDate!.toIso8601String(),
+        ),
+      _storage.setString(StorageKeys.membershipStatus, membershipStatus.name),
+      _storage.setJsonList(
+        StorageKeys.completedMissions,
+        completedMissions.map((m) => m.toJson()).toList(),
+      ),
+      _storage.setJsonList(
+        StorageKeys.gratitudeEntries,
+        gratitudeEntries.map((e) => e.toJson()).toList(),
+      ),
+      _storage.setJsonList(
+        StorageKeys.reflectionEntries,
+        reflectionEntries.map((e) => e.toJson()).toList(),
+      ),
+      _storage.setJsonList(
+        StorageKeys.moodEntries,
+        moodEntries.map((e) => e.toJson()).toList(),
+      ),
+      _storage.setStringList(
+        StorageKeys.unlockedAchievements,
+        unlockedAchievementIds.toList(),
+      ),
+      _storage.setInt(
+        StorageKeys.communityReactionCount,
+        communityReactionCount,
+      ),
+      _storage.setInt(StorageKeys.communityPostCount, communityPostCount),
+    ]);
+  }
+
+  // ---------------------------------------------------------------------
   // Onboarding & membership
   // ---------------------------------------------------------------------
 
@@ -244,6 +437,7 @@ class AppState extends ChangeNotifier {
         StorageKeys.membershipStatus,
         membershipStatus.name,
       );
+      _syncUserDoc();
       notifyListeners();
     }
     return success;
@@ -259,6 +453,7 @@ class AppState extends ChangeNotifier {
     if (name != null) profile.name = name;
     if (avatarEmoji != null) profile.avatarEmoji = avatarEmoji;
     await _storage.setJson(StorageKeys.userProfile, profile.toJson());
+    _syncUserDoc();
     notifyListeners();
   }
 
@@ -274,6 +469,9 @@ class AppState extends ChangeNotifier {
     }
     todayMoodBefore = value;
     await _persistMood();
+    if (uid != null) {
+      _firestore.upsertMoodEntry(uid!, moodEntries.first).catchError((_) {});
+    }
     notifyListeners();
   }
 
@@ -290,6 +488,9 @@ class AppState extends ChangeNotifier {
     }
     todayMoodAfter = value;
     await _persistMood();
+    if (uid != null) {
+      _firestore.upsertMoodEntry(uid!, moodEntries.first).catchError((_) {});
+    }
     notifyListeners();
   }
 
@@ -347,6 +548,11 @@ class AppState extends ChangeNotifier {
         unlockedAchievementIds.toList(),
       ),
     ]);
+
+    if (uid != null) {
+      _firestore.addCompletedMission(uid!, completed).catchError((_) {});
+      _syncUserDoc();
+    }
 
     notifyListeners();
 
@@ -408,11 +614,16 @@ class AppState extends ChangeNotifier {
           ? completedMissions.first.category
           : null,
       isCurrentUser: true,
+      authorUid: uid,
     );
     posts.insert(0, post);
     communityPostCount++;
     await _storage.setInt(StorageKeys.communityPostCount, communityPostCount);
     _checkAchievements();
+    if (uid != null) {
+      _firestore.publishPost(post).catchError((_) {});
+      _syncUserDoc();
+    }
     notifyListeners();
   }
 
@@ -435,19 +646,28 @@ class AppState extends ChangeNotifier {
       post.reactionCounts[reaction] = (post.reactionCounts[reaction] ?? 0) + 1;
       post.userReaction = reaction;
     }
+    if (uid != null && post.authorUid != null) {
+      _firestore
+          .setReactionCount(post.id, post.reactionCounts)
+          .catchError((_) {});
+      _syncUserDoc();
+    }
     notifyListeners();
   }
 
   void addComment(Post post, String text) {
-    post.comments.add(
-      Comment(
-        id: 'c_${DateTime.now().millisecondsSinceEpoch}',
-        authorName: profile.name,
-        text: text,
-        postedAt: DateTime.now(),
-        isCurrentUser: true,
-      ),
+    final comment = Comment(
+      id: 'c_${DateTime.now().millisecondsSinceEpoch}',
+      authorName: profile.name,
+      text: text,
+      postedAt: DateTime.now(),
+      isCurrentUser: true,
+      authorUid: uid,
     );
+    post.comments.add(comment);
+    if (uid != null && post.authorUid != null) {
+      _firestore.addComment(post.id, comment).catchError((_) {});
+    }
     notifyListeners();
   }
 
@@ -475,6 +695,10 @@ class AppState extends ChangeNotifier {
       StorageKeys.unlockedAchievements,
       unlockedAchievementIds.toList(),
     );
+    if (uid != null) {
+      _firestore.addGratitudeEntry(uid!, entry).catchError((_) {});
+      _syncUserDoc();
+    }
     notifyListeners();
   }
 
@@ -495,6 +719,9 @@ class AppState extends ChangeNotifier {
       StorageKeys.reflectionEntries,
       reflectionEntries.map((e) => e.toJson()).toList(),
     );
+    if (uid != null) {
+      _firestore.addReflectionEntry(uid!, entry).catchError((_) {});
+    }
     notifyListeners();
   }
 }

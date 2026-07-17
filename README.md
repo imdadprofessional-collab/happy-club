@@ -77,32 +77,73 @@ a real backend without changing the UI layer:
 
 ## Firebase
 
-The Android app is connected to a real Firebase project (`happy-club-156a5`):
-`android/app/google-services.json` is committed, the Google Services Gradle
-plugin is applied (`android/settings.gradle.kts` + `android/app/build.gradle.kts`),
-and `Firebase.initializeApp()` runs in `main.dart` before the app starts.
-`firebase_core` and `cloud_firestore` are in `pubspec.yaml`.
+The Android app is connected to a real Firebase project (`happy-club-156a5`)
+with **real auth and Firestore sync wired in**, not just the SDK plumbing:
 
-That's the plumbing, not the wiring: no screen reads or writes Firestore
-yet, and there's no Firebase Auth — the app still runs entirely on local
-`SharedPreferences` via `StorageService`. Still to do:
+- `android/app/google-services.json` is committed, the Google Services
+  Gradle plugin is applied, and `Firebase.initializeApp()` runs in
+  `main.dart` before the app starts.
+- **Auth** (`lib/services/auth_service.dart`): email/password and Google
+  Sign-In. `AuthScreen` sits between the onboarding intro and the paywall —
+  every account is now a real Firebase user, not an anonymous local profile.
+  A signed-in session is re-attached silently on app restart (Firebase Auth
+  persists it natively); `attachUser`/`detachUser` in `AppState` wire that
+  into the rest of the app. Sign out is in Profile → settings icon.
+- **Sync** (`lib/services/firestore_service.dart`): `StorageService`
+  (`SharedPreferences`) is still the fast, always-available local cache —
+  Firestore is a best-effort mirror on top of it. On first sign-in, if the
+  account already has data in Firestore (another device), that data
+  replaces local state; otherwise the current local state is pushed up.
+  After that, every mutation (`completeTodayMission`, journal entries,
+  mood, posts, reactions, comments, profile edits, membership changes)
+  fire-and-forget writes to Firestore in addition to saving locally. This
+  is "remote wins on sign-in, then last-write-wins per mutation" — not
+  proper multi-device conflict resolution, which would be the next step
+  for a product meant to be used on multiple devices at once.
+- **Security rules** are in `firestore.rules` at the repo root (paste into
+  Firebase Console → Firestore Database → Rules → Publish): a user can only
+  read/write their own `users/{uid}` doc and subcollections; the shared
+  `posts` collection is readable by any signed-in member, but you can only
+  create/delete your own posts, and reacting to someone else's post can
+  only touch its `reactionCounts` field.
 
-- Enable a sign-in method in the Firebase console (Authentication tab) and
-  add a real `AuthService` + sign-in screen — right now every install is an
-  anonymous, unlinked local profile.
-- Write a `FirestoreRepository` behind the same shape as `StorageService`
-  and swap it into `AppState` (missions, posts, journals, gamification
-  state) so data syncs across devices instead of staying on-device.
-- Set real Firestore security rules once there's an auth model — Firestore
-  starts locked down (or wide open in test mode) by default; don't ship
-  either extreme.
+Still to do:
+
+- **Google Sign-In needs two things only you can provide** (see below):
+  SHA-1 fingerprints registered in the Firebase console, and the OAuth Web
+  client ID dropped into `lib/services/google_sign_in_config.dart`. Without
+  these, email/password sign-in works but Google Sign-In will fail.
 - iOS isn't configured — only `google-services.json` (Android) exists. Add
   an iOS app in the Firebase console, download `GoogleService-Info.plist`,
   and run `flutterfire configure` to generate `firebase_options.dart` if/when
   iOS needs it.
 - Restrict the API key in `google-services.json` (Google Cloud Console →
-  Credentials) to this Android package + SHA-1 fingerprint. It's low-risk in
-  a private repo, but worth doing before the repo is ever made public.
+  Credentials) to this Android package + SHA-1 fingerprint. Low-risk in a
+  private repo, worth doing before it's ever made public.
+- No password-reset UI yet (`AuthService.sendPasswordResetEmail` exists,
+  just isn't wired to a button).
+- The Happy Feed only pulls remote posts once, on sign-in — it's not a live
+  stream, so you won't see other users' new posts appear in real time
+  without restarting/re-signing-in. Swapping `loadRecentPosts` for a
+  Firestore `.snapshots()` stream is the natural upgrade.
+
+### Google Sign-In setup (you need to do this in the console)
+
+1. **SHA-1 fingerprints** — Firebase Console → Project settings → your
+   Android app → "Add fingerprint":
+   - Release: `B5:30:0A:79:1B:6D:7B:FA:C2:BF:6E:FE:C8:F7:D4:0A:E0:CB:E8:6C`
+     (from the upload keystore generated earlier in this conversation)
+   - Debug (needed for local `flutter run` testing): get yours with
+     `keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android -keypass android`
+     on whatever machine you run/debug the app from — every developer
+     machine has a different debug keystore, so add each one that needs it.
+2. **Web client ID** — Firebase Console → Authentication → Sign-in method →
+   Google → expand it → copy the "Web client ID" (or Google Cloud Console →
+   APIs & Services → Credentials → the OAuth client named "Web client (auto
+   created by Google Service)"). Paste it into
+   `googleSignInServerClientId` in `lib/services/google_sign_in_config.dart`.
+   Without this, Firebase can't verify the Google ID token's audience and
+   sign-in will fail even though the button works.
 
 ## Running it
 

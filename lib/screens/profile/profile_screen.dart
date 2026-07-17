@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../models/mission.dart';
+import '../../services/auth_service.dart';
 import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/glass_card.dart';
@@ -241,6 +242,20 @@ class ProfileScreen extends StatelessWidget {
                 onSelectionChanged: (selection) =>
                     appState.setThemeMode(selection.first),
               ),
+              if (appState.isSignedIn) ...[
+                const SizedBox(height: 20),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.logout_rounded),
+                  title: const Text('Sign Out'),
+                  subtitle: const Text('Your data stays saved on this device.'),
+                  onTap: () async {
+                    Navigator.of(context).pop();
+                    await AuthService().signOut();
+                    appState.detachUser();
+                  },
+                ),
+              ],
               const SizedBox(height: 12),
             ],
           ),

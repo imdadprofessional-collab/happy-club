@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/primary_button.dart';
-import 'membership_screen.dart';
+import '../auth/auth_screen.dart';
 
 class OnboardingFlow extends StatefulWidget {
   const OnboardingFlow({super.key});
@@ -40,9 +40,9 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
         curve: Curves.easeOutCubic,
       );
     } else {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const MembershipScreen()),
-      );
+      Navigator.of(
+        context,
+      ).pushReplacement(MaterialPageRoute(builder: (_) => const AuthScreen()));
     }
   }
 

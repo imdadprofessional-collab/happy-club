@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -38,8 +39,26 @@ class _HappyClubAppState extends State<HappyClubApp> {
     final storage = await StorageService.create();
     final appState = AppState(storage: storage);
     await appState.init();
+    await _reattachSignedInUser(appState);
     if (!mounted) return;
     setState(() => _appState = appState);
+  }
+
+  /// Firebase Auth persists sign-in across restarts on its own; this just
+  /// re-links that existing session to [AppState] so Firestore sync resumes
+  /// without asking the user to sign in again. Wrapped in try/catch because
+  /// widget tests construct [HappyClubApp] directly without running `main()`
+  /// (and therefore without `Firebase.initializeApp()`), which would
+  /// otherwise throw here.
+  Future<void> _reattachSignedInUser(AppState appState) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        await appState.attachUser(newUid: user.uid, email: user.email);
+      }
+    } catch (_) {
+      // No Firebase app in this context (e.g. tests) — local-only is fine.
+    }
   }
 
   @override
