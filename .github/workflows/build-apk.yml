@@ -14,6 +14,12 @@ jobs:
   build:
     name: Analyze, test, and build APKs
     runs-on: ubuntu-latest
+    env:
+      # `if:` conditions can't reference `secrets` directly (GitHub rejects
+      # the whole workflow file if they do — it fails every run instantly
+      # with no job ever scheduled, which is what happened here for a
+      # while). Route it through `env:` first instead.
+      HAS_RELEASE_SIGNING: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -45,7 +51,7 @@ jobs:
       # so the release build/bundle below are signed with the real upload
       # key instead of falling back to the debug key.
       - name: Configure release signing
-        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        if: ${{ env.HAS_RELEASE_SIGNING == 'true' }}
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
