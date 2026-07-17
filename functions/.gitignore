@@ -1,5 +1,10 @@
 node_modules/
-.env
-.env.*
+# .env holds only non-secret config (GEMINI_MODEL) — Firebase's dotenv
+# convention for resolving defineString() params during CI deploys. The
+# actual API key stays in Secret Manager via defineSecret(), never here.
+# Any *local* override files stay ignored, since those are where a
+# developer might accidentally put something sensitive.
+.env.local
+.env.*.local
 firebase-debug.log
 firebase-debug.*.log
