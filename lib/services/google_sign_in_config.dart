@@ -12,4 +12,5 @@
 /// Leave empty to disable the server-side ID-token audience check (Google
 /// Sign-In will still work for account selection, but
 /// [GoogleSignIn.initialize] is called without a serverClientId).
-const String googleSignInServerClientId = '';
+const String googleSignInServerClientId =
+    '781226755640-jhqudnoc56phe4a2tl8eaftdbvao6f0l.apps.googleusercontent.com';
