@@ -26,7 +26,7 @@ extension MembershipPlanX on MembershipPlan {
       case MembershipPlan.monthly:
         return '\$4.99 / month';
       case MembershipPlan.yearly:
-        return '\$49.99 / year';
+        return '\$39.99 / year';
     }
   }
 }

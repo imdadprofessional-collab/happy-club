@@ -13,8 +13,11 @@ allowed by the product brief.
 A fully working, polished app experience running entirely offline against
 local device storage:
 
-- **Onboarding** — welcome, "one mission a day" explainer, `$1` first-month
-  paywall, and an animated payment-success celebration.
+- **Onboarding** — welcome, "one mission a day" explainer, account creation,
+  and an animated welcome celebration straight into the free app. No hard
+  paywall gate: the `$1` first-month upgrade is offered as a soft,
+  dismissable prompt after the user has completed a few missions (see
+  "Monetization" below), plus anytime from Profile.
 - **Home** — today's mission, streak flame, happiness score, XP/level bar,
   mood check-in, daily quote, and community highlights.
 - **200+ hand-written daily missions** across all 20 categories from the
@@ -64,7 +67,7 @@ a real backend without changing the UI layer:
   `storage_service.dart`. Firebase itself is now wired into the app (see
   below) but `AppState` doesn't read/write Firestore yet — that repository
   swap is the next step.
-- **`MembershipService`** — mocks the `$1` trial → `$4.99/mo` → `$49.99/yr`
+- **`MembershipService`** — mocks the `$1` trial → `$4.99/mo` → `$39.99/yr`
   purchase flow. Swap for Google Play Billing / StoreKit (or a wrapper like
   RevenueCat), mirroring entitlement state server-side.
 - **`AiCoachService`** — ships fully offline with curated response
@@ -84,8 +87,9 @@ with **real auth and Firestore sync wired in**, not just the SDK plumbing:
   Gradle plugin is applied, and `Firebase.initializeApp()` runs in
   `main.dart` before the app starts.
 - **Auth** (`lib/services/auth_service.dart`): email/password and Google
-  Sign-In. `AuthScreen` sits between the onboarding intro and the paywall —
-  every account is now a real Firebase user, not an anonymous local profile.
+  Sign-In. `AuthScreen` sits between the onboarding intro and the free home
+  screen — every account is now a real Firebase user, not an anonymous
+  local profile.
   A signed-in session is re-attached silently on app restart (Firebase Auth
   persists it natively); `attachUser`/`detachUser` in `AppState` wire that
   into the rest of the app. Sign out is in Profile → settings icon.
@@ -184,6 +188,32 @@ Requirements before that works:
 Nothing on the Flutter side needs to change after deploying — the app calls
 the function by name (`coachChat`) via the Firebase SDK, not a URL, so it
 resolves automatically once the function exists.
+
+## Monetization
+
+The app is free-first: `AuthScreen` → an animated welcome screen →
+straight into `RootShell`, no purchase gate in between. This matters most
+before the app has real download/review numbers to lean on — a cold paywall
+in front of zero social proof converts poorly, so the pitch is only shown
+once the user has actually felt the habit loop work.
+
+- **Soft, engagement-triggered upgrade offer**: `AppState.shouldShowUpgradeOffer`
+  goes true once the user has completed `upgradeOfferMissionThreshold` (3)
+  missions and isn't already a member; `home_screen.dart` then pushes
+  `MembershipScreen` once, with a contextual strap-line ("You've completed 3
+  missions — real momentum!"). `markUpgradeOfferShown` persists that it was
+  shown so it never interrupts again — after that, upgrading is opt-in only,
+  from the "Free Explorer" badge on Profile.
+- **Plans**: `$1` first month → `$4.99/mo` → `$39.99/yr` (anchored as the
+  better deal against monthly). Premium unlocks the real Gemini AI Coach,
+  happiness trend analytics, exclusive cosmetics, early event access, and a
+  Founding Member badge — see `MembershipScreen`'s benefit list.
+- **Streak Freeze** (`AppState.streakFreezes`): a loss-aversion mechanic —
+  missing exactly one day no longer resets the streak if a freeze is
+  available (`GamificationService.nextStreak`, consumed automatically).
+  Every membership purchase grants one; free users can buy one with coins
+  (`AppState.buyStreakFreeze`, `AppState.streakFreezeCoinCost` = 150) via the
+  snowflake chip next to the streak flame on Home.
 
 ## Running it
 

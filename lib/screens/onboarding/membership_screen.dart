@@ -4,10 +4,18 @@ import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/gradient_card.dart';
 import '../../widgets/primary_button.dart';
-import 'payment_success_screen.dart';
 
+/// The upgrade paywall. No longer a hard gate in onboarding — this is
+/// pushed on top of whatever screen the user is already on (a post-
+/// engagement prompt from the home screen, or a manual tap from their
+/// profile), so both the purchase and "not now" paths simply pop back.
 class MembershipScreen extends StatefulWidget {
-  const MembershipScreen({super.key});
+  const MembershipScreen({super.key, this.contextLine});
+
+  /// Optional strap-line shown above the pitch card, used to make the
+  /// engagement-triggered prompt feel earned rather than generic — e.g.
+  /// "You've completed 3 missions — nice momentum! 🎉".
+  final String? contextLine;
 
   @override
   State<MembershipScreen> createState() => _MembershipScreenState();
@@ -17,12 +25,12 @@ class _MembershipScreenState extends State<MembershipScreen> {
   bool _purchasing = false;
 
   static const _benefits = [
-    ('Daily Missions', Icons.today_rounded),
-    ('AI Happiness Coach', Icons.psychology_alt_rounded),
-    ('Positive Community', Icons.groups_rounded),
-    ('Daily Inspiration', Icons.wb_sunny_rounded),
-    ('Progress Tracking', Icons.insights_rounded),
-    ('Achievement System', Icons.emoji_events_rounded),
+    ('Real AI Happiness Coach', Icons.psychology_alt_rounded),
+    ('Happiness Trends & Analytics', Icons.insights_rounded),
+    ('Streak Freeze (protect your streak)', Icons.ac_unit_rounded),
+    ('Exclusive Frames & Cosmetics', Icons.auto_awesome_rounded),
+    ('Early Access to Monthly Events', Icons.event_available_rounded),
+    ('Founding Member Badge', Icons.workspace_premium_rounded),
   ];
 
   Future<void> _unlock() async {
@@ -32,21 +40,44 @@ class _MembershipScreenState extends State<MembershipScreen> {
     if (!mounted) return;
     setState(() => _purchasing = false);
     if (success) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const PaymentSuccessScreen()),
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Welcome aboard! Your first month is unlocked.'),
+        ),
       );
+      Navigator.of(context).pop();
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(elevation: 0, backgroundColor: Colors.transparent),
       body: SafeArea(
+        top: false,
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              if (widget.contextLine != null) ...[
+                GradientCard(
+                  colors: AppColors.growthGradient,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 14,
+                  ),
+                  child: Text(
+                    widget.contextLine!,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
               GradientCard(
                 colors: AppColors.heroGradient,
                 padding: const EdgeInsets.all(28),
@@ -131,7 +162,7 @@ class _MembershipScreenState extends State<MembershipScreen> {
               ),
               const SizedBox(height: 10),
               Text(
-                'Renews at \$4.99/month after your first month, or switch to \$49.99/year anytime. Cancel anytime.',
+                'Renews at \$4.99/month after your first month, or switch to \$39.99/year anytime. Cancel anytime.',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
@@ -140,16 +171,8 @@ class _MembershipScreenState extends State<MembershipScreen> {
                 child: TextButton(
                   onPressed: _purchasing
                       ? null
-                      : () {
-                          Navigator.of(context).pushReplacement(
-                            MaterialPageRoute(
-                              builder: (_) => const PaymentSuccessScreen(
-                                skippedPurchase: true,
-                              ),
-                            ),
-                          );
-                        },
-                  child: const Text('Not now, explore first'),
+                      : () => Navigator.of(context).pop(),
+                  child: const Text('Not now, maybe later'),
                 ),
               ),
             ],

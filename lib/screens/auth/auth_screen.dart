@@ -6,7 +6,7 @@ import '../../services/auth_service.dart';
 import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/primary_button.dart';
-import '../onboarding/membership_screen.dart';
+import '../onboarding/payment_success_screen.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -42,7 +42,7 @@ class _AuthScreenState extends State<AuthScreen> {
     }
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const MembershipScreen()),
+      MaterialPageRoute(builder: (_) => const PaymentSuccessScreen()),
     );
   }
 

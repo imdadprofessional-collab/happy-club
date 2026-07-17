@@ -57,13 +57,17 @@ class GamificationService {
     return (xp: xp, coins: coins, isSurpriseBonus: isSurprise);
   }
 
-  /// Computes the new streak count given the last completion date.
-  static int nextStreak({
+  /// Computes the new streak count given the last completion date, spending
+  /// a streak freeze (if one is available) to bridge exactly one missed day
+  /// instead of resetting to 1 — the loss-aversion safety net members can
+  /// stock up on.
+  static ({int streak, bool freezeUsed}) nextStreak({
     required DateTime? lastCompletion,
     required int currentStreak,
     required DateTime today,
+    int freezesAvailable = 0,
   }) {
-    if (lastCompletion == null) return 1;
+    if (lastCompletion == null) return (streak: 1, freezeUsed: false);
     final last = DateTime(
       lastCompletion.year,
       lastCompletion.month,
@@ -72,10 +76,14 @@ class GamificationService {
     final now = DateTime(today.year, today.month, today.day);
     final diff = now.difference(last).inDays;
     if (diff == 0) {
-      return currentStreak == 0 ? 1 : currentStreak; // already completed today
+      // already completed today
+      return (streak: currentStreak == 0 ? 1 : currentStreak, freezeUsed: false);
     }
-    if (diff == 1) return currentStreak + 1;
-    return 1; // streak broken, restart
+    if (diff == 1) return (streak: currentStreak + 1, freezeUsed: false);
+    if (diff == 2 && freezesAvailable > 0) {
+      return (streak: currentStreak + 1, freezeUsed: true);
+    }
+    return (streak: 1, freezeUsed: false); // streak broken, restart
   }
 
   /// A private wellbeing-oriented score (0-100), not a competitive metric.

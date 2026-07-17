@@ -8,9 +8,7 @@ import '../../widgets/primary_button.dart';
 import '../root/root_shell.dart';
 
 class PaymentSuccessScreen extends StatefulWidget {
-  const PaymentSuccessScreen({super.key, this.skippedPurchase = false});
-
-  final bool skippedPurchase;
+  const PaymentSuccessScreen({super.key});
 
   @override
   State<PaymentSuccessScreen> createState() => _PaymentSuccessScreenState();

@@ -8,6 +8,7 @@ import '../../theme/app_colors.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/gradient_card.dart';
 import '../../widgets/xp_bar.dart';
+import '../onboarding/membership_screen.dart';
 import 'achievements_screen.dart';
 import 'edit_profile_sheet.dart';
 
@@ -272,6 +273,7 @@ class _MembershipBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final upgradable = !status.isActive;
     final label = switch (status) {
       MembershipStatus.trialActive => 'First Month Member',
       MembershipStatus.monthly => 'Monthly Member',
@@ -279,14 +281,28 @@ class _MembershipBadge extends StatelessWidget {
       MembershipStatus.expired => 'Membership Expired',
       MembershipStatus.none => 'Free Explorer',
     };
-    return GlassCard(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        children: [
-          const Icon(Icons.workspace_premium_rounded, color: AppColors.amber),
-          const SizedBox(width: 10),
-          Text(label, style: Theme.of(context).textTheme.titleMedium),
-        ],
+    return GestureDetector(
+      onTap: upgradable
+          ? () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const MembershipScreen()),
+            )
+          : null,
+      child: GlassCard(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.workspace_premium_rounded,
+              color: AppColors.amber,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(label, style: Theme.of(context).textTheme.titleMedium),
+            ),
+            if (upgradable)
+              const Icon(Icons.chevron_right_rounded, color: AppColors.amber),
+          ],
+        ),
       ),
     );
   }

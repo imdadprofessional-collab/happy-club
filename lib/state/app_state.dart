@@ -28,6 +28,7 @@ class MissionRewardResult {
     required this.leveledUp,
     required this.newlyUnlocked,
     required this.completedMission,
+    required this.freezeUsed,
   });
 
   final int xpEarned;
@@ -37,12 +38,22 @@ class MissionRewardResult {
   final bool leveledUp;
   final List<Achievement> newlyUnlocked;
   final CompletedMission completedMission;
+  final bool freezeUsed;
 }
 
 /// Single source of truth for the whole app. A real deployment would split
 /// this into repositories backed by Firebase Auth + Firestore (with this
 /// class's shape mostly unchanged) — see [StorageService] for the seam.
 class AppState extends ChangeNotifier {
+  /// Coin price of a single streak freeze for non-members. Premium members
+  /// also get one free with every purchase (see [purchaseMembership]).
+  static const int streakFreezeCoinCost = 150;
+
+  /// A soft, non-blocking upgrade offer appears once the user has proven
+  /// out the habit loop — after this many completed missions — rather than
+  /// gating the app before they've felt any value.
+  static const int upgradeOfferMissionThreshold = 3;
+
   AppState({
     required StorageService storage,
     MissionEngine? missionEngine,
@@ -84,6 +95,8 @@ class AppState extends ChangeNotifier {
   int coins = 0;
   int streak = 0;
   int longestStreak = 0;
+  int streakFreezes = 0;
+  bool upgradeOfferShown = false;
   DateTime? lastCompletionDate;
 
   final List<CompletedMission> completedMissions = [];
@@ -123,6 +136,14 @@ class AppState extends ChangeNotifier {
     communityEncouragements: communityReactionCount,
   );
 
+  /// True once the user has real momentum (a few completed missions) but
+  /// isn't a member yet and hasn't already dismissed the one-time offer —
+  /// the trigger point for the soft, post-engagement upgrade prompt.
+  bool get shouldShowUpgradeOffer =>
+      !membershipStatus.isActive &&
+      !upgradeOfferShown &&
+      completedMissions.length >= upgradeOfferMissionThreshold;
+
   // ---------------------------------------------------------------------
   // Bootstrapping
   // ---------------------------------------------------------------------
@@ -151,6 +172,9 @@ class AppState extends ChangeNotifier {
     coins = _storage.getInt(StorageKeys.coins) ?? 0;
     streak = _storage.getInt(StorageKeys.streak) ?? 0;
     longestStreak = _storage.getInt(StorageKeys.longestStreak) ?? 0;
+    streakFreezes = _storage.getInt(StorageKeys.streakFreezes) ?? 0;
+    upgradeOfferShown =
+        _storage.getBool(StorageKeys.upgradeOfferShown) ?? false;
     final lastCompletionRaw = _storage.getString(
       StorageKeys.lastCompletionDate,
     );
@@ -289,6 +313,7 @@ class AppState extends ChangeNotifier {
     coins = data['coins'] as int? ?? coins;
     streak = data['streak'] as int? ?? streak;
     longestStreak = data['longestStreak'] as int? ?? longestStreak;
+    streakFreezes = data['streakFreezes'] as int? ?? streakFreezes;
     final lastCompletionRaw = data['lastCompletionDate'] as String?;
     if (lastCompletionRaw != null) {
       lastCompletionDate = DateTime.tryParse(lastCompletionRaw);
@@ -364,6 +389,7 @@ class AppState extends ChangeNotifier {
     'coins': coins,
     'streak': streak,
     'longestStreak': longestStreak,
+    'streakFreezes': streakFreezes,
     'lastCompletionDate': lastCompletionDate?.toIso8601String(),
     'membershipStatus': membershipStatus.name,
     'communityReactionCount': communityReactionCount,
@@ -385,6 +411,7 @@ class AppState extends ChangeNotifier {
       _storage.setInt(StorageKeys.coins, coins),
       _storage.setInt(StorageKeys.streak, streak),
       _storage.setInt(StorageKeys.longestStreak, longestStreak),
+      _storage.setInt(StorageKeys.streakFreezes, streakFreezes),
       if (lastCompletionDate != null)
         _storage.setString(
           StorageKeys.lastCompletionDate,
@@ -437,14 +464,42 @@ class AppState extends ChangeNotifier {
         MembershipPlan.monthly => MembershipStatus.monthly,
         MembershipPlan.yearly => MembershipStatus.yearly,
       };
-      await _storage.setString(
-        StorageKeys.membershipStatus,
-        membershipStatus.name,
-      );
+      streakFreezes += 1; // welcome perk for new members
+      await Future.wait([
+        _storage.setString(
+          StorageKeys.membershipStatus,
+          membershipStatus.name,
+        ),
+        _storage.setInt(StorageKeys.streakFreezes, streakFreezes),
+      ]);
       _syncUserDoc();
       notifyListeners();
     }
     return success;
+  }
+
+  /// Marks the one-time, post-engagement upgrade offer as seen so it never
+  /// interrupts the user again (they can still open the paywall manually
+  /// from their profile at any time).
+  Future<void> markUpgradeOfferShown() async {
+    upgradeOfferShown = true;
+    await _storage.setBool(StorageKeys.upgradeOfferShown, true);
+  }
+
+  /// Lets free users buy a streak freeze directly with coins instead of
+  /// subscribing — a small monetization lever that also keeps non-payers
+  /// engaged enough to come back and try the paid tier later.
+  Future<bool> buyStreakFreeze() async {
+    if (coins < streakFreezeCoinCost) return false;
+    coins -= streakFreezeCoinCost;
+    streakFreezes += 1;
+    await Future.wait([
+      _storage.setInt(StorageKeys.coins, coins),
+      _storage.setInt(StorageKeys.streakFreezes, streakFreezes),
+    ]);
+    _syncUserDoc();
+    notifyListeners();
+    return true;
   }
 
   Future<void> setThemeMode(ThemeMode mode) async {
@@ -512,11 +567,14 @@ class AppState extends ChangeNotifier {
     final today = DateTime.now();
     final levelBefore = level;
 
-    streak = GamificationService.nextStreak(
+    final streakResult = GamificationService.nextStreak(
       lastCompletion: lastCompletionDate,
       currentStreak: streak,
       today: today,
+      freezesAvailable: streakFreezes,
     );
+    streak = streakResult.streak;
+    if (streakResult.freezeUsed) streakFreezes -= 1;
     longestStreak = streak > longestStreak ? streak : longestStreak;
     lastCompletionDate = today;
 
@@ -539,6 +597,7 @@ class AppState extends ChangeNotifier {
       _storage.setInt(StorageKeys.coins, coins),
       _storage.setInt(StorageKeys.streak, streak),
       _storage.setInt(StorageKeys.longestStreak, longestStreak),
+      _storage.setInt(StorageKeys.streakFreezes, streakFreezes),
       _storage.setString(
         StorageKeys.lastCompletionDate,
         today.toIso8601String(),
@@ -568,6 +627,7 @@ class AppState extends ChangeNotifier {
       leveledUp: level > levelBefore,
       newlyUnlocked: newlyUnlocked,
       completedMission: completed,
+      freezeUsed: streakResult.freezeUsed,
     );
   }
 

@@ -7,8 +7,10 @@ import '../../theme/app_colors.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/primary_button.dart';
 import '../../widgets/streak_flame.dart';
+import '../../widgets/streak_freeze_sheet.dart';
 import '../../widgets/xp_bar.dart';
 import '../feed/post_card.dart';
+import '../onboarding/membership_screen.dart';
 import 'mission_completion_screen.dart';
 import 'mood_checkin_sheet.dart';
 
@@ -53,6 +55,20 @@ class _HomeScreenState extends State<HomeScreen> {
         builder: (_) => MissionCompletionScreen(result: result),
       ),
     );
+    if (!mounted) return;
+    if (appState.shouldShowUpgradeOffer) {
+      await appState.markUpgradeOfferShown();
+      if (!mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => const MembershipScreen(
+            contextLine:
+                "You've completed 3 missions — real momentum! 🎉 "
+                'Unlock the full experience.',
+          ),
+        ),
+      );
+    }
   }
 
   @override
@@ -89,7 +105,13 @@ class _HomeScreenState extends State<HomeScreen> {
                         ],
                       ),
                     ),
-                    StreakFlame(streak: appState.streak),
+                    GestureDetector(
+                      onTap: () => StreakFreezeSheet.show(context),
+                      child: StreakFlame(
+                        streak: appState.streak,
+                        freezes: appState.streakFreezes,
+                      ),
+                    ),
                   ],
                 ),
               ),

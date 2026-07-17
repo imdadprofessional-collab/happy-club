@@ -96,6 +96,28 @@ class _MissionCompletionScreenState extends State<MissionCompletionScreen> {
                       ),
                     ],
                   ).animate().fadeIn(delay: 350.ms).slideY(begin: 0.15, end: 0),
+                  if (r.freezeUsed) ...[
+                    const SizedBox(height: 16),
+                    GradientCard(
+                      colors: const [Color(0xFF4FACFE), Color(0xFF00F2FE)],
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.ac_unit_rounded, color: Colors.white),
+                          const SizedBox(width: 12),
+                          const Expanded(
+                            child: Text(
+                              'You missed a day, but a Streak Freeze saved it. Your streak lives on!',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ).animate().fadeIn(delay: 400.ms).scale(),
+                  ],
                   if (r.isSurpriseBonus) ...[
                     const SizedBox(height: 16),
                     GradientCard(

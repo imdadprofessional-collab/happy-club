@@ -87,4 +87,6 @@ class StorageKeys {
   static const communityReactionCount = 'community_reaction_count';
   static const communityPostCount = 'community_post_count';
   static const themeMode = 'theme_mode';
+  static const upgradeOfferShown = 'upgrade_offer_shown';
+  static const streakFreezes = 'streak_freezes';
 }
