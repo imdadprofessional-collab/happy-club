@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'screens/onboarding/onboarding_flow.dart';
 import 'screens/root/root_shell.dart';
+import 'services/notification_service.dart';
 import 'services/storage_service.dart';
 import 'state/app_state.dart';
 import 'theme/app_colors.dart';
@@ -40,6 +43,9 @@ class _HappyClubAppState extends State<HappyClubApp> {
     final appState = AppState(storage: storage);
     await appState.init();
     await _reattachSignedInUser(appState);
+    // Fire-and-forget: scheduling the daily reminders shouldn't delay first
+    // frame, and NotificationService already swallows its own failures.
+    unawaited(NotificationService.instance.initAndSchedule());
     if (!mounted) return;
     setState(() => _appState = appState);
   }

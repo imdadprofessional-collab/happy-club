@@ -1,4 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Required on Android 13+ to post the daily reminder notifications
+         (see lib/services/notification_service.dart); requested at runtime
+         too, this manifest entry is what makes the runtime prompt legal. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application
         android:label="happy_club"
         android:name="${applicationName}"
