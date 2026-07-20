@@ -85,12 +85,10 @@ class MembershipService {
   /// plugin genuinely reports unavailable.
   Future<bool> _ensureReady() async {
     try {
-      if (_purchaseSub == null) {
-        _purchaseSub = InAppPurchase.instance.purchaseStream.listen(
-          _onPurchaseUpdate,
-          onError: (_) {},
-        );
-      }
+      _purchaseSub ??= InAppPurchase.instance.purchaseStream.listen(
+        _onPurchaseUpdate,
+        onError: (_) {},
+      );
       return await InAppPurchase.instance.isAvailable();
     } catch (_) {
       return false;
