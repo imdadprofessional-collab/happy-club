@@ -250,3 +250,5 @@ next step before shipping.
   "someone celebrated your achievement", streak reminders).
 - Add crash reporting/analytics and an accessibility pass (screen reader
   labels, dynamic type, contrast checks) before release.
+  Need to be added new features.
+  
