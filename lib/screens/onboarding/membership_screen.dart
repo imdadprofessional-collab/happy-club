@@ -23,6 +23,7 @@ class MembershipScreen extends StatefulWidget {
 
 class _MembershipScreenState extends State<MembershipScreen> {
   bool _purchasing = false;
+  bool _restoring = false;
 
   static const _benefits = [
     ('Real AI Happiness Coach', Icons.psychology_alt_rounded),
@@ -47,6 +48,24 @@ class _MembershipScreenState extends State<MembershipScreen> {
       );
       Navigator.of(context).pop();
     }
+  }
+
+  Future<void> _restore() async {
+    setState(() => _restoring = true);
+    final appState = context.read<AppState>();
+    final restored = await appState.restoreMembership();
+    if (!mounted) return;
+    setState(() => _restoring = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          restored
+              ? 'Your membership has been restored.'
+              : 'No previous purchase found for this account.',
+        ),
+      ),
+    );
+    if (restored) Navigator.of(context).pop();
   }
 
   @override
@@ -173,6 +192,14 @@ class _MembershipScreenState extends State<MembershipScreen> {
                       ? null
                       : () => Navigator.of(context).pop(),
                   child: const Text('Not now, maybe later'),
+                ),
+              ),
+              Center(
+                child: TextButton(
+                  onPressed: (_purchasing || _restoring) ? null : _restore,
+                  child: Text(
+                    _restoring ? 'Restoring…' : 'Restore purchases',
+                  ),
                 ),
               ),
             ],

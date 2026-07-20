@@ -478,6 +478,24 @@ class AppState extends ChangeNotifier {
     return success;
   }
 
+  /// Re-links a previously purchased subscription to this account (e.g.
+  /// after a reinstall or device switch). Since only the monthly plan is
+  /// currently offered from the paywall, a restored purchase is treated as
+  /// an active monthly membership.
+  Future<bool> restoreMembership() async {
+    final restored = await _membershipService.restorePurchases();
+    if (restored && !membershipStatus.isActive) {
+      membershipStatus = MembershipStatus.monthly;
+      await _storage.setString(
+        StorageKeys.membershipStatus,
+        membershipStatus.name,
+      );
+      _syncUserDoc();
+      notifyListeners();
+    }
+    return restored;
+  }
+
   /// Marks the one-time, post-engagement upgrade offer as seen so it never
   /// interrupts the user again (they can still open the paywall manually
   /// from their profile at any time).
